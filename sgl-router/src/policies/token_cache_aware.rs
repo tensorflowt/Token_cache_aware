@@ -133,7 +133,8 @@ impl LoadBalancingPolicy for TokenCacheAwarePolicy {
     fn select_worker(  
         &self,  
         workers: &[Arc<dyn Worker>],  
-        request_text: Option<&str>,  
+        request_text: Option<&str>,
+        token_ids: Option<&[u32]>,
     ) -> Option<usize> {  
         let healthy_indices = get_healthy_worker_indices(workers);  
   
@@ -172,30 +173,36 @@ impl LoadBalancingPolicy for TokenCacheAwarePolicy {
             return Some(min_load_idx);  
         }  
   
-        // 负载平衡时使用外部缓存匹配  
-        let text = request_text.unwrap_or("");  
-          
-        if text.is_empty() {  
-            // 空请求，返回随机健康 worker  
-            let mut rng = rand::rng();  
-            let random_idx = rng.random_range(0..healthy_indices.len());  
-            return Some(healthy_indices[random_idx]);  
-        }  
-  
-        // 将请求文本转换为 token IDs  
-        let token_ids = match self.tokenize_request(text) {  
-            Ok(ids) => ids,  
-            Err(e) => {  
-                warn!("Failed to tokenize request: {}, falling back to random selection", e);  
+        // 负载平衡时使用外部缓存匹配
+        // 优先使用传入的 token_ids (gRPC PD 模式)  
+        let token_ids_vec = if let Some(ids) = token_ids {  
+            ids.to_vec()  
+        } else {  
+            // 回退到 tokenization (非 gRPC PD 模式或测试场景)
+            let text = request_text.unwrap_or("");  
+            
+            if text.is_empty() {  
+                // 空请求,返回随机健康 worker  
                 let mut rng = rand::rng();  
                 let random_idx = rng.random_range(0..healthy_indices.len());  
                 return Some(healthy_indices[random_idx]);  
+            }  
+    
+            // 将请求文本转换为 token IDs  
+            match self.tokenize_request(text) {  
+                Ok(ids) => ids,  
+                Err(e) => {  
+                    warn!("Failed to tokenize request: {}, falling back to random selection", e);  
+                    let mut rng = rand::rng();  
+                    let random_idx = rng.random_range(0..healthy_indices.len());  
+                    return Some(healthy_indices[random_idx]);
+                }
             }  
         };  
   
         // 调用 Nexuts API  
         let rt = tokio::runtime::Handle::current();  
-        let worker_id = match rt.block_on(self.call_nexuts_api(token_ids)) {  
+        let worker_id = match rt.block_on(self.call_nexuts_api(token_ids_vec)) {  
             Ok(id) => id,  
             Err(e) => {  
                 warn!("Failed to call Nexuts API: {}, falling back to random selection", e);  
@@ -218,7 +225,7 @@ impl LoadBalancingPolicy for TokenCacheAwarePolicy {
             }  
         }  
   
-        // 如果找不到对应的 worker 或 worker 不健康，回退到随机选择  
+        // 如果找不到对应的 worker 或 worker 不健康,回退到随机选择  
         debug!("Worker {} not found or unhealthy, falling back to random selection", worker_id);  
         let mut rng = rand::rng();  
         let random_idx = rng.random_range(0..healthy_indices.len());  
@@ -230,7 +237,7 @@ impl LoadBalancingPolicy for TokenCacheAwarePolicy {
     }  
   
     fn needs_request_text(&self) -> bool {  
-        true // Token cache-aware policy 需要请求文本进行 tokenization  
+        true // Token cache-aware policy 需要请求文本或 token_ids  
     }  
   
     fn on_request_complete(&self, worker_url: &str, success: bool) {  
@@ -251,10 +258,11 @@ impl LoadBalancingPolicy for TokenCacheAwarePolicy {
         &self,  
         prefill_workers: &[Arc<dyn Worker>],  
         decode_workers: &[Arc<dyn Worker>],  
-        request_text: Option<&str>,  
+        request_text: Option<&str>,
+        token_ids: Option<&[u32]>,
     ) -> Option<(usize, usize)> {  
-        // Prefill 使用 token cache-aware 逻辑  
-        let prefill_idx = self.select_worker(prefill_workers, request_text)?;  
+        // Prefill 使用 token cache-aware 逻辑,传递 token_ids 
+        let prefill_idx = self.select_worker(prefill_workers, request_text, token_ids)?;  
   
         // Decode 使用最短负载逻辑  
         let healthy_decode = get_healthy_worker_indices(decode_workers);  

@@ -36,6 +36,7 @@ pub trait LoadBalancingPolicy: Send + Sync + Debug {
         &self,
         workers: &[Arc<dyn Worker>],
         request_text: Option<&str>,
+        token_ids: Option<&[u32]>,
     ) -> Option<usize>;
 
     /// Select a pair of workers (prefill and decode) for PD routing
@@ -47,6 +48,7 @@ pub trait LoadBalancingPolicy: Send + Sync + Debug {
         prefill_workers: &[Arc<dyn Worker>],
         decode_workers: &[Arc<dyn Worker>],
         request_text: Option<&str>,
+        token_ids: Option<&[u32]>,
     ) -> Option<(usize, usize)> {
         // Default implementation: independently select from each pool
         let prefill_idx = self.select_worker(prefill_workers, request_text)?;
