@@ -274,7 +274,7 @@ impl PipelineStage for WorkerSelectionStage {
 
         let workers = match self.mode {
             WorkerSelectionMode::Regular => {
-                match self.select_single_worker(ctx.input.model_id.as_deref(), text) {
+                match self.select_single_worker(ctx.input.model_id.as_deref(), text, ctx) {
                     Some(w) => WorkerSelection::Single { worker: w },
                     None => {
                         return Err(utils::service_unavailable_error(format!(
@@ -285,7 +285,7 @@ impl PipelineStage for WorkerSelectionStage {
                 }
             }
             WorkerSelectionMode::PrefillDecode => {
-                match self.select_pd_pair(ctx.input.model_id.as_deref(), text) {
+                match self.select_pd_pair(ctx.input.model_id.as_deref(), text, ctx) {
                     Some((prefill, decode)) => WorkerSelection::Dual { prefill, decode },
                     None => {
                         return Err(utils::service_unavailable_error(format!(
@@ -311,6 +311,7 @@ impl WorkerSelectionStage {
         &self,
         model_id: Option<&str>,
         text: Option<&str>,
+        ctx: &RequestContext,
     ) -> Option<Arc<dyn Worker>> {
         // Get workers for the specified model, filtered by connection mode
         let workers = self.worker_registry.get_workers_filtered(
@@ -337,8 +338,11 @@ impl WorkerSelectionStage {
             None => self.policy_registry.get_default_policy(),
         };
 
+        // 提取 token_ids  
+        let token_ids = ctx.state.preparation.as_ref().map(|p| p.token_ids.as_slice());
+
         // Select worker using the policy
-        let idx = policy.select_worker(&available, text)?;
+        let idx = policy.select_worker(&available, text, token_ids)?;
         Some(available[idx].clone())
     }
 
@@ -346,6 +350,7 @@ impl WorkerSelectionStage {
         &self,
         model_id: Option<&str>,
         text: Option<&str>,
+        ctx: &RequestContext,
     ) -> Option<(Arc<dyn Worker>, Arc<dyn Worker>)> {
         let all_workers = self.worker_registry.get_workers_filtered(
             model_id,
@@ -383,9 +388,12 @@ impl WorkerSelectionStage {
             Some(model) => self.policy_registry.get_policy_or_default(model),
             None => self.policy_registry.get_default_policy(),
         };
+        
+        // 提取 token_ids  
+        let token_ids = ctx.state.preparation.as_ref().map(|p| p.token_ids.as_slice());
 
-        let prefill_idx = policy.select_worker(&available_prefill, text)?;
-        let decode_idx = policy.select_worker(&available_decode, text)?;
+        let prefill_idx = policy.select_worker(&available_prefill, text, token_ids)?; 
+        let decode_idx = policy.select_worker(&available_decode, text, token_ids)?; 
 
         Some((
             available_prefill[prefill_idx].clone(),

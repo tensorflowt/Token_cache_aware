@@ -754,7 +754,7 @@ mod tests {
             nexuts_url: "http://localhost:8080".to_string(),  
         };  
         assert_eq!(token_cache_aware.name(), "token_cache_aware");  
-        };
+    }
 
     #[test]
     fn test_policy_config_serialization() {

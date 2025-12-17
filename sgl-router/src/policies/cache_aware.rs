@@ -511,6 +511,7 @@ impl LoadBalancingPolicy for CacheAwarePolicy {
         &self,
         workers: &[Arc<dyn Worker>],
         request_text: Option<&str>,
+        _token_ids: Option<&[u32]>,
     ) -> Option<usize> {
         let healthy_indices = get_healthy_worker_indices(workers);
 
@@ -669,6 +670,7 @@ impl LoadBalancingPolicy for CacheAwarePolicy {
         prefill_workers: &[Arc<dyn Worker>],
         decode_workers: &[Arc<dyn Worker>],
         request_text: Option<&str>,
+        _token_ids: Option<&[u32]>,
     ) -> Option<(usize, usize)> {
         // DEPRECATED: This method is no longer used when separate policies are configured.
         // The PD router now uses separate policies for prefill and decode selection.
@@ -679,7 +681,7 @@ impl LoadBalancingPolicy for CacheAwarePolicy {
         // - Decode: Use least-load routing for better load distribution
 
         // Select prefill worker using cache-aware logic
-        let prefill_idx = self.select_worker(prefill_workers, request_text)?;
+        let prefill_idx = self.select_worker(prefill_workers, request_text, None)?;
 
         // Select decode worker using least-load logic
         let healthy_decode = get_healthy_worker_indices(decode_workers);

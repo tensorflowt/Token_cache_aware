@@ -246,6 +246,50 @@ impl ConfigValidator {
                     });
                 }
             }
+            PolicyConfig::TokenCacheAware {  
+                cache_threshold,  
+                balance_abs_threshold: _,  
+                balance_rel_threshold,  
+                eviction_interval_secs,  
+                max_tree_size,  
+                nexuts_url: _,  
+            } => {  
+                // 验证 cache_threshold  
+                if !(0.0..=1.0).contains(cache_threshold) {  
+                    return Err(ConfigError::InvalidValue {  
+                        field: "cache_threshold".to_string(),  
+                        value: cache_threshold.to_string(),  
+                        reason: "Must be between 0.0 and 1.0".to_string(),  
+                    });  
+                }  
+            
+                // 验证 balance_rel_threshold  
+                if *balance_rel_threshold < 1.0 {  
+                    return Err(ConfigError::InvalidValue {  
+                        field: "balance_rel_threshold".to_string(),  
+                        value: balance_rel_threshold.to_string(),  
+                        reason: "Must be >= 1.0".to_string(),  
+                    });  
+                }  
+            
+                // 验证 eviction_interval_secs  
+                if *eviction_interval_secs == 0 {  
+                    return Err(ConfigError::InvalidValue {  
+                        field: "eviction_interval_secs".to_string(),  
+                        value: eviction_interval_secs.to_string(),  
+                        reason: "Must be > 0".to_string(),  
+                    });  
+                }  
+            
+                // 验证 max_tree_size  
+                if *max_tree_size == 0 {  
+                    return Err(ConfigError::InvalidValue {  
+                        field: "max_tree_size".to_string(),  
+                        value: max_tree_size.to_string(),  
+                        reason: "Must be > 0".to_string(),  
+                    });  
+                }  
+            }
         }
         Ok(())
     }
@@ -500,6 +544,32 @@ impl ConfigValidator {
             return Err(ConfigError::ValidationFailed {
                 reason: "gRPC connection mode with cache sync enabled requires either --tokenizer-path or --model-path to be specified".to_string(),
             });
+        }
+
+        // Extract prefill and decode policies for TokenCacheAware validation  
+        let (prefill_policy, decode_policy) = if let RoutingMode::PrefillDecode {   
+            prefill_policy,   
+            decode_policy,   
+            ..   
+        } = &config.mode {  
+            (prefill_policy.as_ref(), decode_policy.as_ref())  
+        } else {  
+            (None, None)  
+        };  
+        
+        // Validate TokenCacheAware policy requires tokenizer in gRPC mode  
+        let token_cache_aware_enabled = matches!(&config.policy,   
+            PolicyConfig::TokenCacheAware { .. }  
+        ) || matches!(prefill_policy, Some(PolicyConfig::TokenCacheAware { .. }))  
+        || matches!(decode_policy, Some(PolicyConfig::TokenCacheAware { .. }));  
+        
+        if token_cache_aware_enabled   
+            && matches!(config.connection_mode, ConnectionMode::Grpc { .. })  
+            && config.tokenizer_path.is_none()  
+            && config.model_path.is_none() {  
+            return Err(ConfigError::ValidationFailed {  
+                reason: "TokenCacheAware policy with gRPC mode requires either --tokenizer-path or --model-path".to_string(),  
+            });  
         }
 
         // Validate TokenCacheAware policy requires tokenizer in gRPC mode  

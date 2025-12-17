@@ -982,12 +982,13 @@ pub async fn startup(config: ServerConfig) -> Result<(), Box<dyn std::error::Err
 
     // Initialize worker registry and policy registry
     let worker_registry = Arc::new(WorkerRegistry::new());
-    let policy_registry = Arc::new(PolicyRegistry::new(config.router_config.policy.clone()));
+    let mut policy_registry = PolicyRegistry::new(config.router_config.policy.clone());
 
     // 如果有 tokenizer，设置到 registry 中  
     if let Some(ref tokenizer) = tokenizer {  
-        policy_registry.set_tokenizer(Some(tokenizer.clone()));  
-    }  
+        policy_registry.set_tokenizer(Some(tokenizer.clone())); 
+    }
+
     let policy_registry = Arc::new(policy_registry);
 
     // Initialize storage backends

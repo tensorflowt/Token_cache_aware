@@ -29,6 +29,7 @@ impl LoadBalancingPolicy for RoundRobinPolicy {
         &self,
         workers: &[Arc<dyn Worker>],
         _request_text: Option<&str>,
+        _token_ids: Option<&[u32]>,
     ) -> Option<usize> {
         let healthy_indices = get_healthy_worker_indices(workers);
 

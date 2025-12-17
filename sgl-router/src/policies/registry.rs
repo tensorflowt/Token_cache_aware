@@ -4,6 +4,7 @@ use std::{
 };
 
 use tracing::{debug, info, warn};
+use crate::tokenizer::traits::Tokenizer;
 
 /// Policy Registry for managing model-to-policy mappings
 ///
@@ -263,40 +264,40 @@ impl PolicyRegistry {
         &self,   
         config: &PolicyConfig  
         ) -> Arc<dyn LoadBalancingPolicy> {  
-            match config {  
-                PolicyConfig::TokenCacheAware {  
-                    cache_threshold,  
-                    balance_abs_threshold,  
-                    balance_rel_threshold,  
-                    eviction_interval_secs,  
-                    max_tree_size,  
-                    nexuts_url,  
-                } => {  
-                    if let Some(tokenizer) = &self.tokenizer {  
-                        let config = CacheAwareConfig {  
-                            cache_threshold: *cache_threshold,  
-                            balance_abs_threshold: *balance_abs_threshold,  
-                            balance_rel_threshold: *balance_rel_threshold,  
-                            eviction_interval_secs: *eviction_interval_secs,  
-                            max_tree_size: *max_tree_size,  
-                            enable_cache_sync: false,  
-                            sync_interval_secs: 0,  
-                        };  
-                        Arc::new(TokenCacheAwarePolicy::with_config_and_url(  
-                            config,  
-                            nexuts_url.clone(),  
-                            tokenizer.clone(),  
-                        ))  
-                    } else {  
-                        warn!("Cannot create TokenCacheAware policy: tokenizer not available");  
-                        Arc::clone(&self.default_policy)  
-                    }  
+        match config {  
+            PolicyConfig::TokenCacheAware {  
+                cache_threshold,  
+                balance_abs_threshold,  
+                balance_rel_threshold,  
+                eviction_interval_secs,  
+                max_tree_size,  
+                nexuts_url,  
+            } => {  
+                if let Some(tokenizer) = &self.tokenizer {  
+                    let config = CacheAwareConfig {  
+                        cache_threshold: *cache_threshold,  
+                        balance_abs_threshold: *balance_abs_threshold,  
+                        balance_rel_threshold: *balance_rel_threshold,  
+                        eviction_interval_secs: *eviction_interval_secs,  
+                        max_tree_size: *max_tree_size,  
+                        enable_cache_sync: false,  
+                        sync_interval_secs: 0,  
+                    };  
+                    Arc::new(TokenCacheAwarePolicy::with_config_and_url(  
+                        config,  
+                        nexuts_url.clone(),  
+                        tokenizer.clone(),  
+                    ))  
+                } else {  
+                    warn!("Cannot create TokenCacheAware policy: tokenizer not available");  
+                    Arc::clone(&self.default_policy)  
                 }  
-                // 其他策略使用原有方法  
-                _ => Self::create_policy_from_config(config),  
             }  
+            // 其他策略使用原有方法  
+            _ => Self::create_policy_from_config(config),  
         }  
-    }
+    }  
+    
 
     /// Get current model->policy mappings (for debugging/monitoring)
     pub fn get_all_mappings(&self) -> HashMap<String, String> {
@@ -466,6 +467,7 @@ impl PolicyRegistry {
         }
     }
 }
+
 
 impl std::fmt::Debug for PolicyRegistry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

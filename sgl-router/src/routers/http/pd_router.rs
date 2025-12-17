@@ -627,7 +627,7 @@ impl PDRouter {
         }
 
         let selected_idx = policy
-            .select_worker(&available_workers, request_text)
+            .select_worker(&available_workers, request_text, None)
             .ok_or_else(|| {
                 format!(
                     "Policy {} failed to select a {} worker",

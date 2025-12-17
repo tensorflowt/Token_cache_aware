@@ -51,8 +51,8 @@ pub trait LoadBalancingPolicy: Send + Sync + Debug {
         token_ids: Option<&[u32]>,
     ) -> Option<(usize, usize)> {
         // Default implementation: independently select from each pool
-        let prefill_idx = self.select_worker(prefill_workers, request_text)?;
-        let decode_idx = self.select_worker(decode_workers, request_text)?;
+        let prefill_idx = self.select_worker(prefill_workers, request_text, None)?;
+        let decode_idx = self.select_worker(decode_workers, request_text, None)?;
         Some((prefill_idx, decode_idx))
     }
 

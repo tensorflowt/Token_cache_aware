@@ -157,7 +157,7 @@ impl Router {
             None => self.policy_registry.get_default_policy(),
         };
 
-        let idx = policy.select_worker(&available, text)?;
+        let idx = policy.select_worker(&available, text, None)?;
         Some(available[idx].clone())
     }
 

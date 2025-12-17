@@ -33,7 +33,6 @@ struct NexutsResponse {
 }  
   
 /// Token Cache-aware routing policy  
-#[derive(Debug)]  
 pub struct TokenCacheAwarePolicy {  
     config: CacheAwareConfig,  
     tokenizer: Arc<dyn Tokenizer>,
@@ -128,7 +127,17 @@ impl TokenCacheAwarePolicy {
         Ok(encoding.token_ids().to_vec())  
     }  
 }  
-  
+
+impl std::fmt::Debug for TokenCacheAwarePolicy {  
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {  
+        f.debug_struct("TokenCacheAwarePolicy")  
+            .field("config", &self.config)  
+            .field("tokenizer", &"Arc<dyn Tokenizer>")  
+            .field("nexuts_url", &self.nexuts_url)  
+            .finish()  
+    }  
+}
+
 impl LoadBalancingPolicy for TokenCacheAwarePolicy {  
     fn select_worker(  
         &self,  
