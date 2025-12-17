@@ -107,7 +107,7 @@ impl RouterFactory {
         ctx: &Arc<AppContext>,
     ) -> Result<Box<dyn RouterTrait>, String> {
         let prefill_policy =
-            PolicyFactory::create_from_config(prefill_policy_config.unwrap_or(main_policy_config));
+            PolicyFactory::create_from_config_with_tokenizer(prefill_policy_config.unwrap_or(main_policy_config),ctx.tokenizer.clone());
         let decode_policy =
             PolicyFactory::create_from_config(decode_policy_config.unwrap_or(main_policy_config));
 

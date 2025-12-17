@@ -502,6 +502,21 @@ impl ConfigValidator {
             });
         }
 
+        // Validate TokenCacheAware policy requires tokenizer in gRPC mode  
+        let token_cache_aware_enabled = matches!(&config.policy,   
+            PolicyConfig::TokenCacheAware { .. }  
+        ) || matches!(prefill_policy, Some(PolicyConfig::TokenCacheAware { .. }))  
+        || matches!(decode_policy, Some(PolicyConfig::TokenCacheAware { .. }));  
+        
+        if token_cache_aware_enabled   
+            && matches!(config.connection_mode, ConnectionMode::Grpc { .. })  
+            && config.tokenizer_path.is_none()  
+            && config.model_path.is_none() {  
+            return Err(ConfigError::ValidationFailed {  
+                reason: "TokenCacheAware policy with gRPC mode requires either --tokenizer-path or --model-path".to_string(),  
+            });  
+        }
+
         // All policies are now supported for both router types thanks to the unified trait design
         // No mode/policy restrictions needed anymore
 
