@@ -13,7 +13,7 @@ use tracing::{debug, info, warn};
 /// When the last worker of a model is removed, the policy mapping is cleaned up.
 use super::{
     CacheAwareConfig, CacheAwarePolicy, LoadBalancingPolicy, PowerOfTwoPolicy, RandomPolicy,
-    RoundRobinPolicy,
+    RoundRobinPolicy, TokenCacheAwarePolicy,
 };
 use crate::{config::types::PolicyConfig, core::Worker};
 
@@ -34,6 +34,9 @@ pub struct PolicyRegistry {
 
     /// Decode policy for PD mode
     decode_policy: Arc<RwLock<Option<Arc<dyn LoadBalancingPolicy>>>>,
+
+    /// Tokenizer for policies that need it
+    tokenizer: Option<Arc<dyn Tokenizer>>,
 }
 
 impl PolicyRegistry {
@@ -47,8 +50,14 @@ impl PolicyRegistry {
             default_policy,
             prefill_policy: Arc::new(RwLock::new(None)),
             decode_policy: Arc::new(RwLock::new(None)),
+            tokenizer: None,
         }
     }
+
+    /// Set the tokenizer for policy that need it
+    pub fn set_tokenizer(&mut self, tokenizer: Option<Arc<dyn Tokenizer>>) {  
+        self.tokenizer = tokenizer;  
+    } 
 
     /// Called when a worker is added
     /// Returns the policy that should be used for this worker's model
@@ -82,7 +91,26 @@ impl PolicyRegistry {
         }
 
         // New model - determine policy
-        let policy = self.determine_policy_for_model(model_id, policy_hint);
+        //let policy = self.determine_policy_for_model(model_id, policy_hint);
+        let policy = if let Some(hint) = policy_hint {  
+        if hint == "token_cache_aware" {  
+                // 使用带 tokenizer 的方法创建  
+                self.create_policy_from_config_with_tokenizer(  
+                    &PolicyConfig::TokenCacheAware {  
+                        cache_threshold: 0.7,  
+                        balance_abs_threshold: 10,  
+                        balance_rel_threshold: 1.5,  
+                        eviction_interval_secs: 300,  
+                        max_tree_size: 1000,  
+                        nexuts_url: "http://localhost:8080".to_string(),  
+                    }  
+                )  
+            } else {  
+                self.determine_policy_for_model(model_id, Some(hint))  
+            }  
+        } else {  
+            self.determine_policy_for_model(model_id, policy_hint)  
+        };
 
         info!(
             "Assigning policy {} to new model {}",
@@ -179,7 +207,20 @@ impl PolicyRegistry {
             _ => {
                 warn!("Unknown policy type '{}', using default", policy_type);
                 Arc::clone(&self.default_policy)
-            }
+            },
+            "token_cache_aware" => {  
+                // 使用 tokenizer 创建 TokenCacheAwarePolicy  
+                if let Some(tokenizer) = &self.tokenizer {  
+                    Arc::new(TokenCacheAwarePolicy::new(tokenizer.clone()))  
+                } else {  
+                    warn!("Cannot create TokenCacheAware policy: tokenizer not available");  
+                    Arc::clone(&self.default_policy)  
+                }  
+            }  
+            _ => {  
+                warn!("Unknown policy type '{}', using default", policy_type);  
+                Arc::clone(&self.default_policy)  
+            }  
         }
     }
 
@@ -209,7 +250,52 @@ impl PolicyRegistry {
                 Arc::new(CacheAwarePolicy::with_config(cache_config))
             }
             PolicyConfig::PowerOfTwo { .. } => Arc::new(PowerOfTwoPolicy::new()),
+            PolicyConfig::TokenCacheAware { .. } => {  
+                // 无法通过配置创建，因为需要 tokenizer  
+                warn!("Cannot create TokenCacheAware policy from config without tokenizer");  
+                Arc::new(RoundRobinPolicy::new()) // 临时方案，后续修复 
+            }  
         }
+    }
+
+    // Create a policy from configuration with tokenizer support  
+    fn create_policy_from_config_with_tokenizer(  
+        &self,   
+        config: &PolicyConfig  
+        ) -> Arc<dyn LoadBalancingPolicy> {  
+            match config {  
+                PolicyConfig::TokenCacheAware {  
+                    cache_threshold,  
+                    balance_abs_threshold,  
+                    balance_rel_threshold,  
+                    eviction_interval_secs,  
+                    max_tree_size,  
+                    nexuts_url,  
+                } => {  
+                    if let Some(tokenizer) = &self.tokenizer {  
+                        let config = CacheAwareConfig {  
+                            cache_threshold: *cache_threshold,  
+                            balance_abs_threshold: *balance_abs_threshold,  
+                            balance_rel_threshold: *balance_rel_threshold,  
+                            eviction_interval_secs: *eviction_interval_secs,  
+                            max_tree_size: *max_tree_size,  
+                            enable_cache_sync: false,  
+                            sync_interval_secs: 0,  
+                        };  
+                        Arc::new(TokenCacheAwarePolicy::with_config_and_url(  
+                            config,  
+                            nexuts_url.clone(),  
+                            tokenizer.clone(),  
+                        ))  
+                    } else {  
+                        warn!("Cannot create TokenCacheAware policy: tokenizer not available");  
+                        Arc::clone(&self.default_policy)  
+                    }  
+                }  
+                // 其他策略使用原有方法  
+                _ => Self::create_policy_from_config(config),  
+            }  
+        }  
     }
 
     /// Get current model->policy mappings (for debugging/monitoring)

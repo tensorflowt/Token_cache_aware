@@ -317,6 +317,22 @@ pub enum PolicyConfig {
         /// Interval for load monitoring (seconds)
         load_check_interval_secs: u64,
     },
+
+    #[serde(rename = "token_cache_aware")]  
+    TokenCacheAware {  
+        /// Minimum prefix match ratio to use cache-based routing  
+        cache_threshold: f32,  
+        /// Absolute load difference threshold for load balancing  
+        balance_abs_threshold: usize,  
+        /// Relative load ratio threshold for load balancing  
+        balance_rel_threshold: f32,  
+        /// Interval between cache eviction cycles (seconds)  
+        eviction_interval_secs: u64,  
+        /// Maximum cache tree size per tenant  
+        max_tree_size: usize,  
+        /// Nexuts API URL for external cache matching  
+        nexuts_url: String,  
+    },
 }
 
 impl PolicyConfig {
@@ -326,6 +342,7 @@ impl PolicyConfig {
             PolicyConfig::RoundRobin => "round_robin",
             PolicyConfig::CacheAware { .. } => "cache_aware",
             PolicyConfig::PowerOfTwo { .. } => "power_of_two",
+            PolicyConfig::TokenCacheAware { .. } => "token_cache_aware", 
         }
     }
 }
@@ -727,7 +744,17 @@ mod tests {
             load_check_interval_secs: 60,
         };
         assert_eq!(power_of_two.name(), "power_of_two");
-    }
+
+        let token_cache_aware = PolicyConfig::TokenCacheAware {  
+            cache_threshold: 0.8,  
+            balance_abs_threshold: 10,  
+            balance_rel_threshold: 1.5,  
+            eviction_interval_secs: 300,  
+            max_tree_size: 1000,  
+            nexuts_url: "http://localhost:8080".to_string(),  
+        };  
+        assert_eq!(token_cache_aware.name(), "token_cache_aware");  
+        };
 
     #[test]
     fn test_policy_config_serialization() {
@@ -753,6 +780,19 @@ mod tests {
         let json = serde_json::to_string(&power_of_two).unwrap();
         assert!(json.contains("\"type\":\"power_of_two\""));
         assert!(json.contains("\"load_check_interval_secs\":60"));
+
+        let token_cache_aware = PolicyConfig::TokenCacheAware {  
+            cache_threshold: 0.8,  
+            balance_abs_threshold: 10,  
+            balance_rel_threshold: 1.5,  
+            eviction_interval_secs: 300,  
+            max_tree_size: 1000,  
+            nexuts_url: "http://localhost:8080".to_string(),  
+        };  
+        let json = serde_json::to_string(&token_cache_aware).unwrap();  
+        assert!(json.contains("\"type\":\"token_cache_aware\""));  
+        assert!(json.contains("\"cache_threshold\":0.8"));  
+        assert!(json.contains("\"nexuts_url\":\"http://localhost:8080\""));
     }
 
     #[test]
