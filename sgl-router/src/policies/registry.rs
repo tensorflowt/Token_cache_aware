@@ -254,7 +254,7 @@ impl PolicyRegistry {
             PolicyConfig::TokenCacheAware { .. } => {  
                 // 无法通过配置创建，因为需要 tokenizer  
                 warn!("Cannot create TokenCacheAware policy from config without tokenizer");  
-                Arc::new(RoundRobinPolicy::new()) // 临时方案，后续修复 
+                Arc::new(RoundRobinPolicy::new()) // 临时方案，后续修复
             }  
         }
     }
